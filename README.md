@@ -1,29 +1,28 @@
-# ANIMA INARI — DEF-uavdetr
+# DEF-UAVDETR — ANIMA Module
 
-> Wave-7 | Japanese Mythology Theme | Module #16
+> **UAV-DETR: Anti-Drone Detection**
+> Paper: [arXiv:2603.22841](https://arxiv.org/abs/2603.22841)
 
-## Paper
-**UAV-DETR: Anti-Drone Detection**
-- ArXiv: https://arxiv.org/abs/2603.22841
-- Repo: https://github.com/wd-sir/UAVDETR
+Part of the [ANIMA Intelligence Compiler Suite](https://github.com/RobotFlow-Labs) by AIFLOW LABS LIMITED.
 
-## Stack Fit
+## Domain
 Defense
 
+## Status
+- [ ] Paper read + ASSETS.md created
+- [ ] PRD-01 through PRD-07
+- [ ] Training pipeline
+- [ ] GPU training
+- [ ] Export: pth + safetensors + ONNX + TRT fp16 + TRT fp32
+- [ ] Push to HuggingFace
+- [ ] Docker serving
+
 ## Quick Start
-
 ```bash
-# Install dependencies
-uv pip install -e ".[dev]"
-
-# Run with MLX (Mac)
-ANIMA_BACKEND=mlx python -m anima_inari
-
-# Run with CUDA (GPU server)
-ANIMA_BACKEND=cuda python -m anima_inari
+cd project_def_uavdetr
+uv venv .venv --python python3.11 && uv sync
+uv run pytest tests/ -v
 ```
 
-## Status
-- Phase: Scaffold
-- MVP: 5%
-- Demo-ready: No
+## License
+MIT — AIFLOW LABS LIMITED
