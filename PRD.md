@@ -1,7 +1,7 @@
 # DEF-UAVDETR: UAV-DETR — Implementation PRD
 ## ANIMA Wave-7 Defense Module
 
-**Status:** PRD-03 complete, PRD-04 data-blocked
+**Status:** PRD-05/06/07 complete, PRD-04 data-blocked, training pipeline ready
 **Version:** 0.2
 **Date:** 2026-04-03
 **Paper:** UAV-DETR: DETR for Anti-Drone Target Detection
@@ -29,7 +29,7 @@ This repo currently contains only a scaffold plus a vendored reference implement
 
 ## Build Plan — Executable PRDs
 
-> Total PRDs: 7 | Tasks: 28 | Status: 12/28 complete
+> Total PRDs: 7 | Tasks: 28 | Status: 24/28 complete
 
 | # | PRD | Title | Priority | Tasks | Status |
 |---|-----|-------|----------|-------|--------|
@@ -37,9 +37,9 @@ This repo currently contains only a scaffold plus a vendored reference implement
 | 2 | [PRD-02](prds/PRD-02-core-model.md) | Core Model | P0 | 4 | ✅ |
 | 3 | [PRD-03](prds/PRD-03-inference.md) | Inference Pipeline | P0 | 4 | ✅ |
 | 4 | [PRD-04](prds/PRD-04-evaluation.md) | Evaluation & Reproduction | P1 | 4 | BLOCKED |
-| 5 | [PRD-05](prds/PRD-05-api-docker.md) | API & Docker | P1 | 4 | ⬜ |
-| 6 | [PRD-06](prds/PRD-06-ros2.md) | ROS2 Integration | P1 | 4 | ⬜ |
-| 7 | [PRD-07](prds/PRD-07-production.md) | Production & Release | P2 | 4 | ⬜ |
+| 5 | [PRD-05](prds/PRD-05-api-docker.md) | API & Docker | P1 | 4 | ✅ |
+| 6 | [PRD-06](prds/PRD-06-ros2.md) | ROS2 Integration | P1 | 4 | ✅ |
+| 7 | [PRD-07](prds/PRD-07-production.md) | Production & Release | P2 | 4 | ✅ |
 
 ## 3. What We Take From The Paper
 - WTConv backbone stages that preserve high-frequency detail for tiny aerial targets.

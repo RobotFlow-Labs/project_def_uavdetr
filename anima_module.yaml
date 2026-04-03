@@ -1,0 +1,81 @@
+name: def-uavdetr
+version: 0.1.0
+codename: DEF-UAVDETR
+domain: defense
+wave: 7
+paper:
+  title: "UAV-DETR: Anti-Drone Detection"
+  arxiv: "2603.22841"
+  authors:
+    - Jun Yang
+    - Dong Wang
+    - Hongxu Yin
+    - Hongpeng Li
+    - Jianxiong Yu
+
+package: anima_def_uavdetr
+python: ">=3.11"
+
+capabilities:
+  - object_detection
+  - uav_detection
+  - anti_drone
+  - real_time_inference
+
+model:
+  architecture: RT-DETR + WTConv + SWSA-IFI + ECFRFN
+  parameters: 11962040
+  input_shape: [3, 640, 640]
+  num_classes: 1
+  class_names: [uav]
+  num_queries: 300
+
+api:
+  framework: fastapi
+  port: 8080
+  endpoints:
+    - path: /predict
+      method: POST
+      description: Run UAV detection on uploaded image
+    - path: /health
+      method: GET
+      description: Service health status
+    - path: /ready
+      method: GET
+      description: Model readiness check
+    - path: /info
+      method: GET
+      description: Module metadata
+
+docker:
+  serve_image: anima-def-uavdetr:latest
+  base_image: ghcr.io/robotflow-labs/anima-serve:jazzy
+  dockerfile: Dockerfile.serve
+  compose: docker-compose.serve.yml
+
+ros2:
+  node_name: def_uavdetr
+  subscribe:
+    - topic: /camera/image_raw
+      type: sensor_msgs/Image
+  publish:
+    - topic: /def_uavdetr/detections
+      type: vision_msgs/Detection2DArray
+    - topic: /def_uavdetr/debug_image
+      type: sensor_msgs/Image
+
+hf:
+  repo: ilessio-aiflowlab/project_def_uavdetr
+  formats:
+    - pytorch
+    - safetensors
+    - onnx
+    - tensorrt_fp16
+    - tensorrt_fp32
+
+datasets:
+  - name: seraphim
+    path: /mnt/forge-data/datasets/uav_detection/seraphim/
+    images: 83483
+    format: yolo
+    license: CC-BY-4.0
