@@ -1,13 +1,7 @@
-"""CUDA-optimized training pipeline for DEF-UAVDETR on Seraphim dataset.
+"""CUDA-optimized training pipeline for DEF-UAVDETR.
 
-Features:
-- Memory-mapped tensor cache (zero CPU bottleneck)
-- torch.compile() kernel fusion
-- torch.amp mixed precision (fp16 forward, fp32 loss)
-- Cosine LR with warmup
-- Checkpoint manager (keep best 2)
-- Early stopping (patience 20)
-- NaN detection + gradient clipping
+Supports multiple YOLO-format datasets: Seraphim, DUT-Anti-UAV, VisDrone.
+Loads directly from NVMe disk with multi-worker prefetch — no tensor cache needed.
 
 Usage:
     CUDA_VISIBLE_DEVICES=6 nohup uv run python scripts/train_cuda.py \\
@@ -25,43 +19,124 @@ import shutil
 import time
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
 from anima_def_uavdetr.model import DefUavDetr
 
 # ── paths ──────────────────────────────────────────────────────────────
-CACHE_DIR = Path("/mnt/forge-data/shared_infra/datasets")
 CKPT_DIR = Path("/mnt/artifacts-datai/checkpoints/project_def_uavdetr")
 LOG_DIR = Path("/mnt/artifacts-datai/logs/project_def_uavdetr")
 TB_DIR = Path("/mnt/artifacts-datai/tensorboard/project_def_uavdetr")
 
+DATASETS = {
+    "seraphim": Path("/mnt/forge-data/datasets/uav_detection/seraphim"),
+    "dut_anti_uav": Path("/mnt/forge-data/datasets/uav_detection/dut_anti_uav"),
+    "visdrone": Path("/mnt/forge-data/datasets/uav_detection/visdrone"),
+}
+
 for d in (CKPT_DIR, LOG_DIR, TB_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
+IMG_SIZE = 640
+
 
 # ── dataset ────────────────────────────────────────────────────────────
-class TensorCacheDataset(Dataset):
-    """Load from pre-built tensor cache — zero PIL, zero CPU decode."""
+class YoloDetectionDataset(Dataset):
+    """Fast disk-based YOLO dataset — reads directly from NVMe."""
 
-    def __init__(self, split: str = "train"):
-        img_path = CACHE_DIR / f"seraphim_{split}_images.pt"
-        tgt_path = CACHE_DIR / f"seraphim_{split}_targets.pt"
-        print(f"[DATA] Loading {img_path} ...")
-        self.images: torch.Tensor = torch.load(img_path, weights_only=True)  # [N,3,640,640] uint8
-        print(f"[DATA] Loading {tgt_path} ...")
-        self.targets: list[dict] = torch.load(tgt_path, weights_only=False)  # noqa: S301
-        print(f"[DATA] {split}: {len(self.images)} images loaded to RAM")
+    def __init__(
+        self, image_dir: Path, label_dir: Path, img_size: int = 640, augment: bool = False,
+    ):
+        self.image_dir = image_dir
+        self.label_dir = label_dir
+        self.img_size = img_size
+        self.augment = augment
+
+        # Collect image paths (exclude zips)
+        exts = {".jpg", ".jpeg", ".png", ".bmp"}
+        self.image_paths = sorted([
+            p for p in image_dir.iterdir()
+            if p.suffix.lower() in exts and p.is_file()
+        ])
+        print(f"[DATA] {image_dir.parent.name}/{image_dir.name}: {len(self.image_paths)} images")
 
     def __len__(self) -> int:
-        return len(self.images)
+        return len(self.image_paths)
+
+    def _load_labels(self, stem: str) -> torch.Tensor:
+        """Load YOLO label → [N, 5] tensor (class_id, cx, cy, w, h)."""
+        lbl_path = self.label_dir / f"{stem}.txt"
+        if not lbl_path.exists():
+            return torch.zeros((0, 5), dtype=torch.float32)
+        try:
+            data = np.loadtxt(str(lbl_path), dtype=np.float32).reshape(-1, 5)
+            return torch.from_numpy(data)
+        except (ValueError, IndexError):
+            return torch.zeros((0, 5), dtype=torch.float32)
 
     def __getitem__(self, idx: int):
-        img = self.images[idx].float() / 255.0  # normalize on-the-fly
-        tgt = self.targets[idx]
-        return img, tgt
+        img_path = self.image_paths[idx]
+
+        # Fast cv2 decode (JPEG hardware-accelerated on most systems)
+        img = cv2.imread(str(img_path), cv2.IMREAD_COLOR)
+        if img is None:
+            # Return black image + empty target on read failure
+            img = np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8)
+        elif img.shape[:2] != (self.img_size, self.img_size):
+            img = cv2.resize(img, (self.img_size, self.img_size))
+
+        # BGR→RGB, HWC→CHW, uint8→float32 normalised
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        tensor = torch.from_numpy(rgb).permute(2, 0, 1).float().div_(255.0)
+
+        # Simple augmentation for training
+        if self.augment:
+            if torch.rand(1).item() > 0.5:
+                tensor = tensor.flip(-1)  # horizontal flip
+
+        # Labels
+        labels = self._load_labels(img_path.stem)
+        if labels.numel() == 0:
+            target = {
+                "labels": torch.zeros(0, dtype=torch.long),
+                "boxes": torch.zeros((0, 4), dtype=torch.float32),
+            }
+        else:
+            target = {
+                "labels": labels[:, 0].long(),
+                "boxes": labels[:, 1:],  # cx, cy, w, h normalised
+            }
+        return tensor, target
+
+
+def build_datasets(dataset_names: list[str], split: str = "train", augment: bool = False):
+    """Build a ConcatDataset from multiple YOLO datasets."""
+    datasets = []
+    for name in dataset_names:
+        root = DATASETS.get(name)
+        if root is None or not root.exists():
+            print(f"[DATA] {name}: not found at {DATASETS.get(name, '???')}, skipping")
+            continue
+        img_dir = root / split / "images"
+        lbl_dir = root / split / "labels"
+        if not img_dir.exists():
+            print(f"[DATA] {name}/{split}: images dir missing, skipping")
+            continue
+        ds = YoloDetectionDataset(img_dir, lbl_dir, IMG_SIZE, augment=augment)
+        if len(ds) > 0:
+            datasets.append(ds)
+
+    if not datasets:
+        raise FileNotFoundError(f"No valid datasets found for split={split}")
+    if len(datasets) == 1:
+        return datasets[0]
+    combined = ConcatDataset(datasets)
+    print(f"[DATA] Combined {split}: {len(combined)} images from {len(datasets)} datasets")
+    return combined
 
 
 def collate_fn(batch):
@@ -72,14 +147,7 @@ def collate_fn(batch):
 
 
 def targets_to_device(targets: list[dict], device: torch.device) -> dict:
-    """Convert per-image target list to loss-function-compatible dict.
-
-    The loss function's ``_as_batch_targets`` expects either:
-    - boxes as a list of per-image tensors, or
-    - boxes as a 3D tensor [B, N, 4]
-
-    We pass lists to handle variable target counts per image.
-    """
+    """Convert per-image targets to loss-function-compatible dict."""
     return {
         "boxes": [t["boxes"].to(device) for t in targets],
         "labels": [t["labels"].to(device) for t in targets],
@@ -88,7 +156,6 @@ def targets_to_device(targets: list[dict], device: torch.device) -> dict:
 
 # ── model ──────────────────────────────────────────────────────────────
 def build_model(num_classes: int = 1, compile_model: bool = True):
-    """Build DefUavDetr and optionally torch.compile."""
     model = DefUavDetr(num_classes=num_classes, num_queries=300)
     params = sum(p.numel() for p in model.parameters())
     print(f"[MODEL] DefUavDetr: {params:,} parameters")
@@ -153,7 +220,6 @@ class CheckpointManager:
             _, old_path = self.history.pop()
             old_path.unlink(missing_ok=True)
 
-        # Copy best
         best_val, best_path = self.history[0]
         shutil.copy2(best_path, self.save_dir / "best.pth")
         return path
@@ -184,31 +250,27 @@ class EarlyStopping:
 
 # ── batch size finder ──────────────────────────────────────────────────
 def find_batch_size(model: nn.Module, device: torch.device, target_util: float = 0.65) -> int:
-    """Binary search for max batch size at target VRAM utilisation.
-
-    Uses training mode with a backward pass to get realistic memory usage.
-    """
+    """Binary search for max batch size with backward pass for realistic memory."""
     model.train()
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
 
-    total_mem = torch.cuda.get_device_properties(device).total_mem
-    target_bytes = int(total_mem * target_util)
+    total_memory = torch.cuda.get_device_properties(device).total_memory
+    target_bytes = int(total_memory * target_util)
 
     bs = 2
     best_bs = 2
-    while bs <= 128:
+    while bs <= 64:
         try:
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats(device)
-            dummy = torch.randn(bs, 3, 640, 640, device=device, requires_grad=False)
+            dummy = torch.randn(bs, 3, IMG_SIZE, IMG_SIZE, device=device)
             with torch.amp.autocast("cuda", dtype=torch.float16):
                 pred_boxes, pred_logits = model(dummy)
-                # Simulate backward pass for realistic memory measurement
                 fake_loss = pred_boxes.sum() + pred_logits.sum()
             fake_loss.backward()
             peak = torch.cuda.max_memory_allocated(device)
-            util = peak / total_mem
+            util = peak / total_memory
             print(f"  bs={bs}: {peak / 1e9:.2f} GB ({util * 100:.1f}%)")
             model.zero_grad(set_to_none=True)
             if peak <= target_bytes:
@@ -229,13 +291,12 @@ def find_batch_size(model: nn.Module, device: torch.device, target_util: float =
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[CONFIG] device={device}, epochs={args.epochs}, lr={args.lr}")
+    print(f"[CONFIG] datasets={args.datasets}")
     print(f"[CONFIG] checkpoint_dir={CKPT_DIR}")
-    print(f"[CONFIG] log_dir={LOG_DIR}")
 
-    # ── GPU info ───────────────────────────────────────────────────
     if device.type == "cuda":
         props = torch.cuda.get_device_properties(device)
-        print(f"[GPU] {props.name}, {props.total_mem / 1e9:.1f} GB VRAM")
+        print(f"[GPU] {props.name}, {props.total_memory / 1e9:.1f} GB VRAM")
 
     # ── model ──────────────────────────────────────────────────────
     model = build_model(num_classes=1, compile_model=args.compile)
@@ -252,8 +313,15 @@ def train(args):
     print(f"[BATCH] batch_size={args.batch_size}")
 
     # ── data ───────────────────────────────────────────────────────
-    train_ds = TensorCacheDataset("train")
-    val_ds = TensorCacheDataset("val")
+    dataset_names = args.datasets.split(",")
+    train_ds = build_datasets(dataset_names, split="train", augment=True)
+    # Use 5% of train as val (deterministic)
+    n_val = max(1, int(len(train_ds) * 0.05))
+    n_train = len(train_ds) - n_val
+    train_ds, val_ds = torch.utils.data.random_split(
+        train_ds, [n_train, n_val],
+        generator=torch.Generator().manual_seed(42),
+    )
     print(f"[DATA] train={len(train_ds)}, val={len(val_ds)}")
 
     train_loader = DataLoader(
@@ -265,6 +333,7 @@ def train(args):
         collate_fn=collate_fn,
         drop_last=True,
         persistent_workers=True,
+        prefetch_factor=3,
     )
     val_loader = DataLoader(
         val_ds,
@@ -277,7 +346,7 @@ def train(args):
 
     # ── optimizer + scheduler ──────────────────────────────────────
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay,
     )
     total_steps = len(train_loader) * args.epochs
     warmup_steps = int(total_steps * 0.05)
@@ -298,18 +367,16 @@ def train(args):
             scaler.load_state_dict(ckpt["scaler"])
         start_epoch = ckpt.get("epoch", 0) + 1
         global_step = ckpt.get("step", 0)
-        print(f"[RESUME] Continuing from epoch {start_epoch}, step {global_step}")
+        print(f"[RESUME] epoch {start_epoch}, step {global_step}")
 
     # ── managers ───────────────────────────────────────────────────
     ckpt_mgr = CheckpointManager(CKPT_DIR, keep_top_k=2, mode="min")
     early_stop = EarlyStopping(patience=args.patience, min_delta=1e-4)
 
-    # ── print config ───────────────────────────────────────────────
     print(f"[TRAIN] epochs={args.epochs}, lr={args.lr}, wd={args.weight_decay}")
-    print(f"[TRAIN] warmup={warmup_steps} steps, total={total_steps} steps")
-    print(f"[TRAIN] steps_per_epoch={len(train_loader)}")
+    print(f"[TRAIN] warmup={warmup_steps}, total_steps={total_steps}")
+    print(f"[TRAIN] steps/epoch={len(train_loader)}")
 
-    # ── check VRAM after first batch ───────────────────────────────
     vram_checked = False
     metrics_path = LOG_DIR / "metrics.jsonl"
 
@@ -333,10 +400,8 @@ def train(args):
                     else:
                         loss = loss_dict
 
-                # NaN detection
                 if torch.isnan(loss):
                     print(f"[FATAL] NaN loss at epoch {epoch}, step {global_step}")
-                    print("[FIX] Reduce lr by 10x or check data")
                     return
 
                 scaler.scale(loss).backward()
@@ -351,23 +416,21 @@ def train(args):
                 epoch_steps += 1
                 global_step += 1
 
-                # VRAM check after first batch
                 if not vram_checked and device.type == "cuda":
                     used = torch.cuda.memory_allocated(device) / 1e9
-                    total = torch.cuda.get_device_properties(device).total_mem / 1e9
+                    total = torch.cuda.get_device_properties(device).total_memory / 1e9
                     pct = used / total * 100
                     print(f"[VRAM] {used:.1f}/{total:.1f} GB ({pct:.0f}%)")
                     if pct < 30:
-                        print(f"[WARN] VRAM usage {pct:.0f}% — too low, consider larger batch")
+                        print(f"[WARN] VRAM {pct:.0f}% too low, increase batch")
                     vram_checked = True
 
-                # Log every 50 steps
                 if global_step % 50 == 0:
                     lr = scheduler.get_lr()
-                    steps_per_sec = epoch_steps / (time.time() - t_epoch)
+                    sps = epoch_steps / (time.time() - t_epoch)
                     print(
                         f"[Step {global_step}] loss={loss_val:.4f} lr={lr:.2e} "
-                        f"speed={steps_per_sec:.1f} steps/s"
+                        f"speed={sps:.1f} steps/s"
                     )
 
             # ── validation ─────────────────────────────────────────
@@ -398,7 +461,6 @@ def train(args):
                 f"lr={lr:.2e} time={epoch_time:.1f}s"
             )
 
-            # Log metrics
             record = {
                 "epoch": epoch + 1,
                 "step": global_step,
@@ -410,7 +472,6 @@ def train(args):
             metrics_file.write(json.dumps(record) + "\n")
             metrics_file.flush()
 
-            # ── checkpoint ─────────────────────────────────────────
             state = {
                 "model": raw_model.state_dict(),
                 "optimizer": optimizer.state_dict(),
@@ -424,12 +485,11 @@ def train(args):
             }
             ckpt_mgr.save(state, avg_val, global_step)
 
-            # ── early stopping ─────────────────────────────────────
             if early_stop.step(avg_val):
                 print(f"[EARLY STOP] No improvement for {args.patience} epochs")
                 break
 
-    print(f"[DONE] Training complete. Best val_loss={early_stop.best:.4f}")
+    print(f"[DONE] Best val_loss={early_stop.best:.4f}")
     print(f"[DONE] Best checkpoint: {CKPT_DIR / 'best.pth'}")
 
 
@@ -443,9 +503,12 @@ def main():
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--no-compile", dest="compile", action="store_false")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--datasets", type=str, default="seraphim",
+        help="Comma-separated dataset names: seraphim,dut_anti_uav,visdrone",
+    )
     args = parser.parse_args()
 
-    # Seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     if torch.cuda.is_available():
