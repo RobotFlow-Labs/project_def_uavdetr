@@ -1,0 +1,27 @@
+# DEF-UAVDETR CUDA training/inference image
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3-pip curl libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/anima/module
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+COPY pyproject.toml .
+RUN uv venv .venv --python python3.11 \
+    && . .venv/bin/activate \
+    && uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 \
+    && uv pip install -e ".[serve,train]"
+
+COPY . .
+
+ENV ANIMA_DEVICE=cuda
+ENV ANIMA_MODULE_NAME=def-uavdetr
+EXPOSE 8080
+
+CMD [".venv/bin/python", "-m", "uvicorn", "anima_def_uavdetr.api.app:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,68 @@
+version: "3.8"
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile.serve
+  env_file: .env.serve
+  volumes:
+    - ${ANIMA_WEIGHT_DIR:-/data/weights}:/data/weights:ro
+    - ${ANIMA_DATASET_DIR:-/data/datasets}:/data/datasets:ro
+  restart: unless-stopped
+
+services:
+  # Full stack: FastAPI + GPU inference
+  serve:
+    <<: *common
+    profiles: ["serve"]
+    ports:
+      - "${ANIMA_SERVE_PORT:-8080}:8080"
+    network_mode: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      uvicorn anima_def_uavdetr.api.app:app
+      --host 0.0.0.0
+      --port ${ANIMA_SERVE_PORT:-8080}
+
+  # ROS2 node only (for ANIMA compiler pipelines)
+  ros2:
+    <<: *common
+    profiles: ["ros2"]
+    network_mode: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      python -m anima_def_uavdetr.ros2.node
+
+  # API only — no GPU, CPU fallback for dev/debug
+  api:
+    <<: *common
+    profiles: ["api"]
+    ports:
+      - "${ANIMA_SERVE_PORT:-8080}:8080"
+    environment:
+      - ANIMA_DEVICE=cpu
+    command: >
+      uvicorn anima_def_uavdetr.api.app:app
+      --host 0.0.0.0
+      --port ${ANIMA_SERVE_PORT:-8080}
+
+  # Test runner
+  test:
+    <<: *common
+    profiles: ["test"]
+    environment:
+      - ANIMA_DEVICE=cpu
+    command: >
+      pytest tests/ -v --tb=short

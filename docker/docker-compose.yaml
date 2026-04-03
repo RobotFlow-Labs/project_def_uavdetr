@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  cuda:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cuda
+    volumes:
+      - /mnt/forge-data/datasets:/data/datasets:ro
+      - /mnt/artifacts-datai:/data/artifacts
+    environment:
+      - ANIMA_DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "8080:8080"
+
+  mlx:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mlx
+    volumes:
+      - /data/datasets:/data/datasets:ro
+    environment:
+      - ANIMA_DEVICE=cpu
+    ports:
+      - "8081:8080"
