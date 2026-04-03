@@ -110,7 +110,7 @@ async def info():
 
 @app.post("/predict", response_model=DetectionResponse)
 async def predict(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     conf: float = Query(0.25, ge=0.0, le=1.0),
     max_det: int = Query(300, ge=1, le=3000),
 ):

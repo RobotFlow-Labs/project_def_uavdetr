@@ -43,7 +43,9 @@ def _resolve_device(requested: str) -> str:
     return requested
 
 
-def build_predictor(cfg: NodeConfig, settings: UavDetrSettings | None = None) -> DefUavDetrPredictor:
+def build_predictor(
+    cfg: NodeConfig, settings: UavDetrSettings | None = None,
+) -> DefUavDetrPredictor:
     """Construct a predictor from a NodeConfig."""
     settings = settings or UavDetrSettings()
     device = _resolve_device(cfg.device)
@@ -68,7 +70,9 @@ class DefUavDetrNodeBase:
         if self.cfg.frame_skip > 0 and (self._frame_counter % (self.cfg.frame_skip + 1)) != 1:
             return None
 
-        results = self.predictor.predict(image_array, conf=self.cfg.confidence, max_det=self.cfg.max_det)
+        results = self.predictor.predict(
+            image_array, conf=self.cfg.confidence, max_det=self.cfg.max_det,
+        )
         det_array = tensor_to_detection_array(
             results[0],
             image_width=self.cfg.image_width,

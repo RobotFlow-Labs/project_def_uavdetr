@@ -19,10 +19,22 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("checkpoint", default_value="", description="Path to model checkpoint"),
-            DeclareLaunchArgument("confidence", default_value="0.25", description="Detection confidence threshold"),
-            DeclareLaunchArgument("device", default_value="auto", description="Compute device: auto|cuda|cpu"),
-            DeclareLaunchArgument("frame_skip", default_value="0", description="Frames to skip between inferences"),
+            DeclareLaunchArgument(
+                "checkpoint", default_value="",
+                description="Path to model checkpoint",
+            ),
+            DeclareLaunchArgument(
+                "confidence", default_value="0.25",
+                description="Detection confidence threshold",
+            ),
+            DeclareLaunchArgument(
+                "device", default_value="auto",
+                description="Compute device: auto|cuda|cpu",
+            ),
+            DeclareLaunchArgument(
+                "frame_skip", default_value="0",
+                description="Frames to skip between inferences",
+            ),
             Node(
                 package="anima_def_uavdetr",
                 executable="def_uavdetr_node",

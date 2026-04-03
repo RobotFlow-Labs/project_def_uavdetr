@@ -15,8 +15,6 @@ services:
   serve:
     <<: *common
     profiles: ["serve"]
-    ports:
-      - "${ANIMA_SERVE_PORT:-8080}:8080"
     network_mode: host
     deploy:
       resources:
