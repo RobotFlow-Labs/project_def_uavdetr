@@ -1,0 +1,68 @@
+# Paper-faithful training configuration for DEF-UAVDETR
+# Paper: UAV-DETR: Anti-Drone Detection (arXiv 2603.22841)
+# Reference: Table 1, Section 4.2
+
+[project]
+name = "anima-def-uavdetr"
+codename = "DEF-UAVDETR"
+wave = 7
+paper_arxiv = "2603.22841"
+
+[training]
+batch_size = "auto"
+learning_rate = 0.0001
+epochs = 100                     # Paper §4.2: 100 epochs for comparisons
+optimizer = "adamw"
+weight_decay = 0.0001
+scheduler = "cosine"
+warmup_ratio = 0.05              # 5% of total steps
+min_lr = 1e-7
+precision = "fp16"
+gradient_accumulation = 1
+max_grad_norm = 1.0
+seed = 42
+
+[model]
+architecture = "uav-detr"
+num_classes = 1
+num_queries = 300
+backbone = "wtconv"
+encoder = "swsa-ifi"
+neck = "ecfrfn"
+loss_alpha = 0.6                 # Inner-CIoU weight
+nwd_constant = 12.8              # Normalised Wasserstein constant
+
+[data]
+image_size = 640
+frame_sample_stride = 5          # Paper §3.1
+train_split = "train"
+val_split = "valid"
+test_split = "test"
+num_workers = 2
+pin_memory = true
+
+[data.datasets]
+seraphim = "/mnt/forge-data/datasets/uav_detection/seraphim"
+dut_anti_uav = "/mnt/forge-data/datasets/uav_detection/dut_anti_uav"
+visdrone = "/mnt/forge-data/datasets/uav_detection/visdrone"
+
+[checkpoint]
+output_dir = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr"
+save_every_n_steps = 500
+keep_top_k = 2
+metric = "val_loss"
+mode = "min"
+
+[early_stopping]
+enabled = true
+patience = 20
+min_delta = 0.0001
+
+[logging]
+log_dir = "/mnt/artifacts-datai/logs/project_def_uavdetr"
+tensorboard_dir = "/mnt/artifacts-datai/tensorboard/project_def_uavdetr"
+
+[export]
+formats = ["pytorch", "safetensors", "onnx", "tensorrt_fp16", "tensorrt_fp32"]
+export_dir = "/mnt/artifacts-datai/exports/project_def_uavdetr"
+hf_repo = "ilessio-aiflowlab/project_def_uavdetr"
