@@ -1,0 +1,19 @@
+[project]
+name = "anima-inari"
+codename = "INARI"
+functional_name = "DEF-uavdetr"
+wave = 7
+paper_arxiv = "2603.22841"
+
+[compute]
+backend = "auto"  # "mlx", "cuda", "auto"
+precision = "fp32"
+
+[data]
+shared_volume = "/Volumes/AIFlowDev/RobotFlowLabs/datasets"
+repos_volume = "/Volumes/AIFlowDev/RobotFlowLabs/repos/wave7"
+
+[hardware]
+zed2i = true
+unitree_l2_lidar = true
+cobot_xarm6 = false  # Set true when purchased

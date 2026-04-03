@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anima-inari"
+version = "0.1.0"
+description = "ANIMA INARI — UAV-DETR: Anti-Drone Detection"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "numpy",
+    "opencv-python",
+]
+
+[project.optional-dependencies]
+mlx = ["mlx>=0.10", "mlx-nn"]
+dev = ["pytest", "ruff", "mypy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

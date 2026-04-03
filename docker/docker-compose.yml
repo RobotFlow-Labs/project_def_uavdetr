@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  inari:
+    build: .
+    volumes:
+      - /Volumes/AIFlowDev/RobotFlowLabs/datasets:/data:ro
+    environment:
+      - ANIMA_BACKEND=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
