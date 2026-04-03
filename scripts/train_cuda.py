@@ -328,18 +328,18 @@ def train(args):
         train_ds,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=args.workers,
         pin_memory=True,
         collate_fn=collate_fn,
         drop_last=True,
-        persistent_workers=True,
-        prefetch_factor=3,
+        persistent_workers=args.workers > 0,
+        prefetch_factor=2 if args.workers > 0 else None,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=2,
+        num_workers=min(args.workers, 2),
         pin_memory=True,
         collate_fn=collate_fn,
     )
@@ -503,6 +503,7 @@ def main():
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--no-compile", dest="compile", action="store_false")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--workers", type=int, default=2, help="DataLoader num_workers")
     parser.add_argument(
         "--datasets", type=str, default="seraphim",
         help="Comma-separated dataset names: seraphim,dut_anti_uav,visdrone",
