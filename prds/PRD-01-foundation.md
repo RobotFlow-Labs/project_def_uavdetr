@@ -2,7 +2,7 @@
 
 > Module: DEF-UAVDETR | Priority: P0
 > Depends on: None
-> Status: ⬜ Not started
+> Status: ✅ Complete
 
 ## Objective
 Create a clean, correctly named `DEF-UAVDETR` Python package, dataset/config contract, and validation scaffolding that all later paper-faithful model work can build on.
@@ -16,12 +16,12 @@ Paper references:
 - §4.2: training/evaluation occurs at `640` resolution on a CUDA stack
 
 ## Acceptance Criteria
-- [ ] `src/anima_def_uavdetr/` exists and replaces the stale `src/anima_inari/` package in project metadata.
-- [ ] Pydantic settings cover dataset roots, split names, training defaults, and export paths.
-- [ ] Dataset manifest logic validates the custom UAV layout and DUT-ANTI-UAV layout without needing the full training stack.
-- [ ] Frame-subsampling utility supports the paper’s 1-in-5 training rule.
-- [ ] Test: `uv run pytest tests/test_config.py tests/test_dataset_manifest.py -v` passes.
-- [ ] Lint: `uv run ruff check src/ tests/` passes for the renamed package and new config code.
+- [x] `src/anima_def_uavdetr/` exists and replaces the stale `src/anima_inari/` package in project metadata.
+- [x] Pydantic settings cover dataset roots, split names, training defaults, and export paths.
+- [x] Dataset manifest logic validates the custom UAV layout and DUT-ANTI-UAV layout without needing the full training stack.
+- [x] Frame-subsampling utility supports the paper’s 1-in-5 training rule.
+- [x] Test: `uv run pytest tests/test_config.py tests/test_dataset_manifest.py -v` passes.
+- [x] Lint: `uv run ruff check src/ tests/` passes for the renamed package and new config code.
 
 ## Files to Create
 

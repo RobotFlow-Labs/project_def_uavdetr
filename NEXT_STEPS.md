@@ -1,13 +1,13 @@
-# INARI — Execution Ledger
+# DEF-UAVDETR — Execution Ledger
 
 Resume rule: Read this file COMPLETELY before writing any code.
 This project covers exactly ONE paper: UAV-DETR: Anti-Drone Detection.
 
 ## 1. Working Rules
-- Work only inside `project_inari/`
+- Work only inside `project_def_uavdetr/`
 - This wave has 17 parallel projects, 17 papers, 17 agents
-- Prefix every commit with `[INARI]`
-- Stage only `project_inari/` files
+- Prefix every commit with `[DEF-UAVDETR]`
+- Stage only `project_def_uavdetr/` files
 - VERIFY THE PAPER BEFORE BUILDING ANYTHING
 
 ## 2. The Paper
@@ -16,22 +16,20 @@ This project covers exactly ONE paper: UAV-DETR: Anti-Drone Detection.
 - **Link**: https://arxiv.org/abs/2603.22841
 - **Repo**: https://github.com/wd-sir/UAVDETR
 - **Compute**: GPU-NEED
-- **Verification status**: ArXiv ID ✅ | Repo ✅ | Paper read ⬜
+- **Verification status**: ArXiv ID ✅ | Repo ✅ | Paper read ✅
 
 ## 3. Current Status
 - **Date**: 2026-04-03
-- **Phase**: Scaffold (just created)
-- **MVP Readiness**: 5%
-- **Accomplished**: Project scaffolded with standard structure
+- **Phase**: PRD-04 evaluation blocked by missing datasets; PRD-05 API is the next independent build slice
+- **MVP Readiness**: 32%
+- **Accomplished**: Planning suite committed; reference repo vendored; paper alignment complete; PRD-01 foundation, PRD-02 core model, and PRD-03 inference pipeline implemented and validated on Python 3.11
 - **TODO**:
-  1. Download paper PDF
-  2. Clone reference repo to /Volumes/AIFlowDev/RobotFlowLabs/repos/wave7
-  3. Read paper thoroughly
-  4. Fill in CLAUDE.md core method / what we take / skip / adapt
-  5. Fill in PRD.md sections 1, 3-6, 8-11
-  6. Run reference demo/inference
-  7. Begin Phase 1 verification
-- **Blockers**: None
+  1. Stage the custom UAV and DUT-ANTI-UAV datasets on the shared volume so PRD-04 can run
+  2. Implement PRD-0401 metrics core once datasets are available
+  3. Build PRD-0501 FastAPI schemas/app as the next independent PRD if evaluation remains blocked
+  4. Add missing infrastructure files required by autopilot gate checks (`anima_module.yaml`, `Dockerfile.serve`, `docker-compose.serve.yml`, `serve.py`)
+  5. Validate Linux/CUDA environment on the training server after prebuild
+- **Blockers**: Datasets and production checkpoints are not staged yet
 
 ## 4. Datasets
 ### Required for this paper
@@ -56,3 +54,7 @@ This project covers exactly ONE paper: UAV-DETR: Anti-Drone Detection.
 | Date | Agent | What Happened |
 |------|-------|---------------|
 | 2026-04-03 | ANIMA Research Agent | Project scaffolded |
+| 2026-04-03 | Codex | Autopilot recovery completed; starting PRD-01 rename/config/data implementation on Python 3.11 with UV and Linux/CUDA-ready torch sources |
+| 2026-04-03 | Codex | PRD-01 complete: renamed package, added typed settings + dataset manifest + frame sampler, pinned repo to Python 3.11 with UV, and passed `uv run pytest tests/test_config.py tests/test_dataset_manifest.py -v` plus `uv run ruff check src/ tests/` |
+| 2026-04-03 | Codex | PRD-02 complete: implemented WTConv backbone, SWSA encoder, ECFRFN neck, RT-DETR-style decoder wrapper, and hybrid Inner-CIoU + NWD loss; passed `uv run pytest tests/test_backbone.py tests/test_encoder.py tests/test_neck.py tests/test_model.py tests/test_losses.py -v` |
+| 2026-04-03 | Codex | PRD-03 complete: added checkpoint I/O, predictor surface, query postprocess, CLI inference, and export hooks; passed `uv run pytest tests/test_infer.py tests/test_checkpoint_io.py tests/test_export.py -v`, `uv run python scripts/run_infer.py --help`, and full `uv run pytest -v` |

@@ -1,17 +1,30 @@
 [project]
-name = "anima-inari"
-codename = "INARI"
-functional_name = "DEF-uavdetr"
+name = "anima-def-uavdetr"
+codename = "DEF-UAVDETR"
+functional_name = "DEF-UAVDETR"
 wave = 7
 paper_arxiv = "2603.22841"
+package_name = "anima_def_uavdetr"
 
 [compute]
-backend = "auto"  # "mlx", "cuda", "auto"
+backend = "auto"  # "mps", "cuda", "cpu", "auto"
 precision = "fp32"
+python = "3.11"
 
 [data]
 shared_volume = "/Volumes/AIFlowDev/RobotFlowLabs/datasets"
 repos_volume = "/Volumes/AIFlowDev/RobotFlowLabs/repos/wave7"
+uav_dataset_root = "/Volumes/AIFlowDev/RobotFlowLabs/datasets/def_uavdetr/uav_dataset"
+dut_dataset_root = "/Volumes/AIFlowDev/RobotFlowLabs/datasets/def_uavdetr/dut_anti_uav"
+frame_sample_stride = 5
+image_size = 640
+train_split = "train"
+val_split = "valid"
+test_split = "test"
+
+[artifacts]
+checkpoints_root = "/Volumes/AIFlowDev/RobotFlowLabs/datasets/models/def_uavdetr/checkpoints"
+export_root = "artifacts/exports"
 
 [hardware]
 zed2i = true

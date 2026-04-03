@@ -2,7 +2,7 @@
 
 > Module: DEF-UAVDETR | Priority: P0
 > Depends on: PRD-02
-> Status: ⬜ Not started
+> Status: ✅ Complete
 
 ## Objective
 Turn the reproduced UAV-DETR network into a usable inference surface with checkpoint loading, image/video prediction, postprocessing, and export hooks.
@@ -16,12 +16,12 @@ Paper references:
 - §4.6: model must eventually tolerate constrained hardware
 
 ## Acceptance Criteria
-- [ ] A typed checkpoint loader can initialize scratch weights, resumed training checkpoints, and exported inference checkpoints.
-- [ ] An inference surface accepts file paths, in-memory tensors, and batched frames.
-- [ ] Postprocessing returns `[x1, y1, x2, y2, score, class_id]` detections and optional visualization overlays.
-- [ ] CLI entrypoint reproduces the role of `repositories/UAVDETR/detect.py` without hard-coded Windows paths.
-- [ ] Export hooks generate at least PyTorch and ONNX outputs, with placeholders for TensorRT and MLX adaptation.
-- [ ] Test: `uv run pytest tests/test_infer.py tests/test_checkpoint_io.py tests/test_export.py -v` passes.
+- [x] A typed checkpoint loader can initialize scratch weights, resumed training checkpoints, and exported inference checkpoints.
+- [x] An inference surface accepts file paths, in-memory tensors, and batched frames.
+- [x] Postprocessing returns `[x1, y1, x2, y2, score, class_id]` detections and optional visualization overlays.
+- [x] CLI entrypoint reproduces the role of `repositories/UAVDETR/detect.py` without hard-coded Windows paths.
+- [x] Export hooks generate at least PyTorch and ONNX outputs, with placeholders for TensorRT and MLX adaptation.
+- [x] Test: `uv run pytest tests/test_infer.py tests/test_checkpoint_io.py tests/test_export.py -v` passes.
 
 ## Files to Create
 

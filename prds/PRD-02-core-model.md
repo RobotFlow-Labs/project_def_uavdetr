@@ -2,7 +2,7 @@
 
 > Module: DEF-UAVDETR | Priority: P0
 > Depends on: PRD-01
-> Status: ⬜ Not started
+> Status: ✅ Complete
 
 ## Objective
 Implement the paper-faithful UAV-DETR network path: WTConv backbone, SWSA-IFI encoder, ECFRFN neck, RT-DETR decoder, and Inner-CIoU + NWD training loss.
@@ -18,13 +18,13 @@ Paper references:
 - §3.5: Algorithm 1 end-to-end training scheme
 
 ## Acceptance Criteria
-- [ ] The backbone emits `S2..S5` feature maps with the paper-consistent strides.
-- [ ] The encoder applies SWSA on the projected `S5` feature map and preserves shape `[B, 256, 20, 20]` at `640x640` input.
-- [ ] The neck emits four fused features `P2..P5`, all `256` channels, suitable for RT-DETR decoding.
-- [ ] The decoder emits `300` queries and supports training and inference output modes.
-- [ ] Hybrid regression loss combines Inner-CIoU and NWD with explicit weighting.
-- [ ] Test: `uv run pytest tests/test_backbone.py tests/test_encoder.py tests/test_neck.py tests/test_model.py tests/test_losses.py -v` passes.
-- [ ] Benchmark: the implemented architecture is shape-compatible with the reference YAML in `repositories/UAVDETR/ultralytics/cfg/models/UAV-DETR.yaml`.
+- [x] The backbone emits `S2..S5` feature maps with the paper-consistent strides.
+- [x] The encoder applies SWSA on the projected `S5` feature map and preserves shape `[B, 256, 20, 20]` at `640x640` input.
+- [x] The neck emits four fused features `P2..P5`, all `256` channels, suitable for RT-DETR decoding.
+- [x] The decoder emits `300` queries and supports training and inference output modes.
+- [x] Hybrid regression loss combines Inner-CIoU and NWD with explicit weighting.
+- [x] Test: `uv run pytest tests/test_backbone.py tests/test_encoder.py tests/test_neck.py tests/test_model.py tests/test_losses.py -v` passes.
+- [x] Benchmark: the implemented architecture is shape-compatible with the reference YAML in `repositories/UAVDETR/ultralytics/cfg/models/UAV-DETR.yaml`.
 
 ## Files to Create
 

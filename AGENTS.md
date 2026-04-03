@@ -35,7 +35,7 @@ uv run ruff format src/ tests/
 ## Conventions
 - Package manager: uv (never pip)
 - Build backend: hatchling
-- Python: >=3.10
+- Python: >=3.11
 - Config: TOML + Pydantic BaseSettings
 - Lint: ruff
 - Git commit prefix: [DEF-UAVDETR]
