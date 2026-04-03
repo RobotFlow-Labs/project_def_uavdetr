@@ -1,0 +1,1 @@
+"""DEF-UAVDETR FastAPI service."""
