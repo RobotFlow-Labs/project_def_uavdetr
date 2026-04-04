@@ -155,8 +155,13 @@ def targets_to_device(targets: list[dict], device: torch.device) -> dict:
 
 
 # ── model ──────────────────────────────────────────────────────────────
-def build_model(num_classes: int = 1, compile_model: bool = True):
-    model = DefUavDetr(num_classes=num_classes, num_queries=300)
+def build_model(num_classes: int = 1, compile_model: bool = True, variant: str = "original"):
+    if variant == "fast":
+        from anima_def_uavdetr.model_fast import DefUavDetrFast
+        model = DefUavDetrFast(num_classes=num_classes, num_queries=300)
+        print(f"[MODEL] Optimizations: {model._optimizations}")
+    else:
+        model = DefUavDetr(num_classes=num_classes, num_queries=300)
     params = sum(p.numel() for p in model.parameters())
     print(f"[MODEL] DefUavDetr: {params:,} parameters")
 
@@ -299,7 +304,7 @@ def train(args):
         print(f"[GPU] {props.name}, {props.total_memory / 1e9:.1f} GB VRAM")
 
     # ── model ──────────────────────────────────────────────────────
-    model = build_model(num_classes=1, compile_model=args.compile)
+    model = build_model(num_classes=1, compile_model=args.compile, variant=args.model)
     if isinstance(model, torch._dynamo.eval_frame.OptimizedModule):
         raw_model = model._orig_mod
     else:
@@ -504,6 +509,7 @@ def main():
     parser.add_argument("--no-compile", dest="compile", action="store_false")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--workers", type=int, default=2, help="DataLoader num_workers")
+    parser.add_argument("--model", type=str, default="original", choices=["original", "fast"])
     parser.add_argument(
         "--datasets", type=str, default="seraphim",
         help="Comma-separated dataset names: seraphim,dut_anti_uav,visdrone",
