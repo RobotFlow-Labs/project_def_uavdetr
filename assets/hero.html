@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DEF-UAVDETR // HERO</title>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --rf-accent: #FF3B00;
+      --rf-accent-glow: rgba(255, 59, 0, 0.3);
+      --rf-accent-dim: rgba(255, 59, 0, 0.15);
+      --rf-bg: #050505;
+      --rf-bg-panel: #1A1A1A;
+      --rf-border: #333333;
+      --rf-text: #ffffff;
+      --rf-text-dim: #999999;
+      --rf-text-muted: #666666;
+      --rf-success: #00FF88;
+      --rf-warning: #FFB800;
+      --rf-restricted: #9B5EFF;
+      --rf-font-display: 'Oswald', sans-serif;
+      --rf-font-mono: 'JetBrains Mono', monospace;
+      --rf-font-tech: 'Chakra Petch', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--rf-font-mono);
+      background: var(--rf-bg);
+      color: var(--rf-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(
+        to bottom, transparent, transparent 2px,
+        rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+      );
+    }
+
+    .hero-wrap {
+      position: relative;
+      width: 1280px;
+      height: 640px;
+      background:
+        linear-gradient(rgba(155,94,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(155,94,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      border: 1px solid var(--rf-border);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .hero-wrap::before,
+    .hero-wrap::after {
+      content: '';
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-color: var(--rf-restricted);
+      border-style: solid;
+    }
+    .hero-wrap::before {
+      top: 12px; left: 12px;
+      border-width: 2px 0 0 2px;
+    }
+    .hero-wrap::after {
+      bottom: 12px; right: 12px;
+      border-width: 0 2px 2px 0;
+    }
+
+    .corner-tr, .corner-bl {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-color: var(--rf-restricted);
+      border-style: solid;
+    }
+    .corner-tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
+    .corner-bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; }
+
+    .glow-line {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--rf-restricted), transparent);
+      animation: scan 3s ease-in-out infinite;
+    }
+    @keyframes scan {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    .hero-tag {
+      font-family: var(--rf-font-mono);
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: var(--rf-restricted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      padding: 4px 16px;
+      border: 1px solid var(--rf-restricted);
+      background: rgba(155,94,255,0.08);
+    }
+
+    .module-code {
+      font-family: var(--rf-font-mono);
+      font-size: 13px;
+      color: var(--rf-text-dim);
+      letter-spacing: 4px;
+      margin-bottom: 8px;
+    }
+
+    .hero-title {
+      font-family: var(--rf-font-display);
+      font-size: 68px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1.0;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .hero-title .accent { color: var(--rf-accent); }
+
+    .hero-subtitle {
+      font-family: var(--rf-font-tech);
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--rf-text-dim);
+      letter-spacing: 2px;
+      margin-bottom: 24px;
+    }
+
+    .hero-desc {
+      font-size: 13px;
+      color: var(--rf-text-dim);
+      max-width: 720px;
+      text-align: center;
+      line-height: 1.8;
+      margin-bottom: 28px;
+    }
+    .hero-desc strong { color: var(--rf-text); font-weight: 500; }
+
+    .stats-row {
+      display: flex;
+      gap: 32px;
+      margin-bottom: 28px;
+    }
+    .stat {
+      text-align: center;
+      padding: 12px 24px;
+      border: 1px solid var(--rf-border);
+      background: var(--rf-bg-panel);
+    }
+    .stat-value {
+      font-family: var(--rf-font-display);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--rf-accent);
+    }
+    .stat-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--rf-text-dim);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .tag-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .tag {
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 4px 12px;
+      border: 1px solid var(--rf-border);
+      color: var(--rf-text-dim);
+      text-transform: uppercase;
+    }
+    .tag.active { border-color: var(--rf-success); color: var(--rf-success); }
+    .tag.restricted { border-color: var(--rf-restricted); color: var(--rf-restricted); }
+
+    .status-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 36px;
+      background: var(--rf-bg-panel);
+      border-top: 1px solid var(--rf-border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 24px;
+      font-size: 11px;
+      color: var(--rf-text-dim);
+      letter-spacing: 1px;
+    }
+    .status-bar .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .dot.green { background: var(--rf-success); box-shadow: 0 0 8px var(--rf-success); }
+    .dot.orange { background: #FFB800; box-shadow: 0 0 8px #FFB800; }
+    .dot.purple { background: var(--rf-restricted); box-shadow: 0 0 8px var(--rf-restricted); }
+
+    .credits {
+      position: absolute;
+      top: 16px;
+      right: 60px;
+      font-size: 10px;
+      color: var(--rf-text-dim);
+      letter-spacing: 1px;
+      text-align: right;
+      line-height: 1.8;
+    }
+    .credits a { color: var(--rf-restricted); text-decoration: none; }
+
+    .pillar-tag {
+      position: absolute;
+      top: 16px;
+      left: 60px;
+      font-size: 10px;
+      color: var(--rf-restricted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .lock-icon {
+      font-size: 10px;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="hero-wrap">
+    <div class="glow-line"></div>
+    <div class="corner-tr"></div>
+    <div class="corner-bl"></div>
+
+    <div class="pillar-tag">&#128274; PILLAR 02 &mdash; ANIMA SUITE // DEFENSE</div>
+
+    <div class="credits">
+      SYSTEM: <a href="https://robotflow-labs.github.io">ANIMA INTELLIGENCE COMPILER</a><br>
+      PAPER: <a href="https://arxiv.org/abs/2603.22841">ARXIV 2603.22841</a>
+    </div>
+
+    <div class="hero-tag"><span class="lock-icon">&#128274;</span> MODULE DEF-UAVDETR</div>
+    <div class="module-code">ANTI-DRONE DETECTION TRANSFORMER</div>
+    <div class="hero-title">
+      <span class="accent">UAV-DETR</span>
+    </div>
+    <div class="hero-subtitle">REAL-TIME COUNTER-UAS &mdash; WAVELET-ENHANCED DETR</div>
+
+    <p class="hero-desc">
+      Paper-faithful RT-DETR with <strong>WTConv backbone</strong>, <strong>SWSA-IFI encoder</strong>,
+      and <strong>Inner-CIoU + NWD hybrid loss</strong> for sub-pixel drone detection.<br>
+      Trained on <strong>83K curated images</strong> from 23 open sources. Fused CUDA wavelet kernels. Zero compromise.
+    </p>
+
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-value">11.9M</div>
+        <div class="stat-label">PARAMETERS</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">83K</div>
+        <div class="stat-label">TRAINING IMAGES</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">3</div>
+        <div class="stat-label">CUDA KERNELS</div>
+      </div>
+    </div>
+
+    <div class="tag-row">
+      <span class="tag active">RT-DETR</span>
+      <span class="tag active">CUDA 12.8</span>
+      <span class="tag">WAVELET CONVOLUTION</span>
+      <span class="tag">COUNTER-UAS</span>
+      <span class="tag">TENSORRT</span>
+      <span class="tag restricted">ANIMA DEFENSE</span>
+    </div>
+
+    <div class="status-bar">
+      <span><span class="dot green"></span>INFERENCE: OPERATIONAL</span>
+      <span><span class="dot green"></span>API: OPERATIONAL</span>
+      <span><span class="dot green"></span>ROS2: OPERATIONAL</span>
+      <span><span class="dot purple"></span>TRAINING: ACTIVE</span>
+      <span style="margin-left:auto; color:#666;">YANG ET AL. &mdash; ARXIV 2603.22841</span>
+    </div>
+  </div>
+</body>
+</html>
