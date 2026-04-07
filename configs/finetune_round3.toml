@@ -1,20 +1,20 @@
-# Round 3: Finetune on custom night/rain/fog dataset
+# Round 3: Finetune on 261K unified_v2 superset (4x L4 DDP)
 # Resume from best.pth of round 2
 
 [project]
 name = "anima-def-uavdetr"
 codename = "DEF-UAVDETR"
 round = 3
-description = "Finetune on custom adverse-conditions dataset (night, rain, fog)"
+description = "Finetune on 261K unified_v2: all 7 datasets"
 
 [training]
-batch_size = 16
-learning_rate = 5e-6             # Even lower LR for final finetune
+batch_size = 16                  # Per-GPU (effective = 64 with 4 GPUs)
+learning_rate = 5e-6             # Lower LR for round 3
 epochs = 20
 optimizer = "adamw"
 weight_decay = 1e-4
 scheduler = "cosine"
-warmup_ratio = 0.03              # Shorter warmup for finetune
+warmup_ratio = 0.03
 min_lr = 1e-7
 precision = "fp16"
 max_grad_norm = 1.0
@@ -25,31 +25,38 @@ num_gpus = 4
 image_size = 640
 num_workers = 2
 
-[data.datasets]
-# Include original + adverse conditions
-seraphim = "/mnt/forge-data/datasets/uav_detection/seraphim"
-birddrone = "/mnt/forge-data/shared_infra/datasets/lat_birddrone"
-dronevehicle_night = "/mnt/forge-data/shared_infra/datasets/dronevehicle_night"
-dut_anti_uav = "/mnt/train-data/datasets/dut_anti_uav"
-# custom_adverse = "/mnt/forge-data/datasets/uav_detection/custom_night_rain_fog"  # Add when ready
+[data.breakdown]
+seraphim = 75134
+birddrone = 145506
+dut_anti_uav = 5200
+dronevehicle_night = 10357
+baidu_uav = 10286
+visdrone = 8629
+# scidb_tir = 1208 (no labels — excluded)
+
+[data.total]
+train = 255112
+val = 6412
+total = 261524
 
 [checkpoint]
 resume = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth"
 output_dir = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr"
 keep_top_k = 2
-metric = "val_loss"
 
 [early_stopping]
 enabled = true
-patience = 8                     # Tighter patience for final round
+patience = 8
 
 [launch]
 command = """
-PYTHONUNBUFFERED=1 PYTHONPATH="" \
-torchrun --nproc_per_node=4 --master_port=29500 \
+PYTHONUNBUFFERED=1 PYTHONPATH="" CUDA_VISIBLE_DEVICES=0,1,4,7 \
+nohup .venv/bin/torchrun --nproc_per_node=4 --master_port=29509 \
     scripts/train_ddp.py \
     --epochs 20 --batch-size 16 --lr 5e-6 \
-    --datasets seraphim,birddrone,dronevehicle_night,dut_anti_uav \
+    --datasets unified \
     --resume /mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth \
-    --workers 2 --patience 8
+    --workers 2 --patience 8 \
+    > /mnt/artifacts-datai/logs/project_def_uavdetr/train_ddp_r3.log 2>&1 &
+disown
 """
