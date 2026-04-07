@@ -1,11 +1,11 @@
-# Round 2: Finetune on 200K+ superset (4x L4 DDP)
+# Round 2: Finetune on 236K unified superset (4x L4 DDP)
 # Resume from best.pth of round 1 (100 epoch Seraphim run)
 
 [project]
 name = "anima-def-uavdetr"
 codename = "DEF-UAVDETR"
 round = 2
-description = "Finetune on 200K+ superset: Seraphim + BirdDrone + DroneVehicle-night + DUT-Anti-UAV"
+description = "Finetune on 236K unified superset: Seraphim + BirdDrone + DroneVehicle-night + DUT-Anti-UAV"
 
 [training]
 batch_size = 16                  # Per-GPU (effective = 64 with 4 GPUs)
@@ -26,10 +26,15 @@ image_size = 640
 num_workers = 2
 
 [data.datasets]
-seraphim = "/mnt/forge-data/datasets/uav_detection/seraphim"
-birddrone = "/mnt/forge-data/shared_infra/datasets/lat_birddrone"
-dronevehicle_night = "/mnt/forge-data/shared_infra/datasets/dronevehicle_night"
-dut_anti_uav = "/mnt/train-data/datasets/dut_anti_uav"
+# Use the unified pre-prepared dataset (all converted to YOLO, symlinked)
+unified = "/mnt/forge-data/shared_infra/datasets/uav_unified"
+
+[data.breakdown]
+# 236K total: Seraphim 75K + BirdDrone 145K + DUT 5.2K + DroneVehicle 10.4K
+seraphim = 75134
+birddrone = 145506
+dut_anti_uav = 5200
+dronevehicle_night = 10357
 
 [checkpoint]
 resume = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth"
@@ -47,7 +52,7 @@ PYTHONUNBUFFERED=1 PYTHONPATH="" \
 torchrun --nproc_per_node=4 --master_port=29500 \
     scripts/train_ddp.py \
     --epochs 30 --batch-size 16 --lr 1e-5 \
-    --datasets seraphim,birddrone,dronevehicle_night,dut_anti_uav \
+    --datasets unified \
     --resume /mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth \
     --workers 2 --patience 10
 """

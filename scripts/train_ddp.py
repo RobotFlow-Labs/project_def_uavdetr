@@ -46,6 +46,7 @@ DATASETS = {
     "birddrone": Path("/mnt/forge-data/shared_infra/datasets/lat_birddrone"),
     "dronevehicle_night": Path("/mnt/forge-data/shared_infra/datasets/dronevehicle_night"),
     "visdrone": Path("/mnt/forge-data/datasets/uav_detection/visdrone"),
+    "unified": Path("/mnt/forge-data/shared_infra/datasets/uav_unified"),
 }
 
 IMG_SIZE = 640
