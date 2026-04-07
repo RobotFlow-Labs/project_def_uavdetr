@@ -28,6 +28,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import datetime
+
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP  # noqa: N817
@@ -57,16 +59,21 @@ class YoloDetectionDataset(Dataset):
     def __init__(
         self, image_dir: Path, label_dir: Path,
         img_size: int = 640, augment: bool = False,
+        file_list: Path | None = None,
     ):
         self.image_dir = image_dir
         self.label_dir = label_dir
         self.img_size = img_size
         self.augment = augment
-        exts = {".jpg", ".jpeg", ".png", ".bmp"}
-        self.image_paths = sorted([
-            p for p in image_dir.iterdir()
-            if p.suffix.lower() in exts and p.is_file()
-        ])
+        if file_list and file_list.exists():
+            # Fast: read pre-cached file list
+            self.image_paths = [Path(p.strip()) for p in file_list.read_text().strip().split("\n") if p.strip()]
+        else:
+            exts = {".jpg", ".jpeg", ".png", ".bmp"}
+            self.image_paths = sorted([
+                p for p in image_dir.iterdir()
+                if p.suffix.lower() in exts and p.is_file()
+            ])
 
     def __len__(self) -> int:
         return len(self.image_paths)
@@ -99,7 +106,8 @@ class YoloDetectionDataset(Dataset):
                 "boxes": torch.zeros((0, 4), dtype=torch.float32),
             }
         else:
-            target = {"labels": labels[:, 0].long(), "boxes": labels[:, 1:]}
+            # Remap all classes to 0 (single-class UAV detection)
+            target = {"labels": torch.zeros(labels.shape[0], dtype=torch.long), "boxes": labels[:, 1:]}
         return tensor, target
 
 
@@ -113,7 +121,8 @@ def build_datasets(dataset_names: list[str], split: str = "train", augment: bool
         lbl_dir = root / split / "labels"
         if not img_dir.exists():
             continue
-        ds = YoloDetectionDataset(img_dir, lbl_dir, IMG_SIZE, augment=augment)
+        file_list = root / f"{split}_files.txt"
+        ds = YoloDetectionDataset(img_dir, lbl_dir, IMG_SIZE, augment=augment, file_list=file_list)
         if len(ds) > 0:
             datasets.append(ds)
     if not datasets:
@@ -215,7 +224,7 @@ class EarlyStopping:
 # ── DDP training loop ─────────────────────────────────────────────────
 def train(args):
     # ── DDP setup ──────────────────────────────────────────────────
-    dist.init_process_group(backend="nccl")
+    dist.init_process_group(backend="nccl", timeout=datetime.timedelta(minutes=10))
     local_rank = dist.get_rank()
     world_size = dist.get_world_size()
     device = torch.device(f"cuda:{local_rank}")
@@ -248,7 +257,7 @@ def train(args):
             print(f"[RESUME] Loaded epoch={epoch_info}, val_loss={val_info}")
 
     # ── wrap in DDP ────────────────────────────────────────────────
-    model = DDP(model, device_ids=[local_rank])
+    model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
 
     # ── data ───────────────────────────────────────────────────────
     dataset_names = args.datasets.split(",")
@@ -457,4 +466,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import traceback as tb
+    try:
+        main()
+    except Exception:
+        tb.print_exc()
+        raise

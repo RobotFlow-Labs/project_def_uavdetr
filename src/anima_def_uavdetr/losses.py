@@ -130,7 +130,8 @@ class HybridInnerCiouNwdLoss(nn.Module):
             batch_target_labels = target_labels[:count]
 
             target_scores = torch.zeros_like(batch_pred_logits)
-            target_scores.scatter_(1, batch_target_labels.unsqueeze(-1), 1.0)
+            scatter_idx = batch_target_labels.unsqueeze(-1).clamp(0, batch_pred_logits.shape[1] - 1)
+            target_scores.scatter_(1, scatter_idx, 1.0)
 
             loss_cls = loss_cls + F.binary_cross_entropy_with_logits(batch_pred_logits, target_scores)
             loss_l1 = loss_l1 + F.l1_loss(batch_pred_boxes, batch_target_boxes)

@@ -110,7 +110,7 @@ class YoloDetectionDataset(Dataset):
             }
         else:
             target = {
-                "labels": labels[:, 0].long(),
+                "labels": torch.zeros(labels.shape[0], dtype=torch.long),
                 "boxes": labels[:, 1:],  # cx, cy, w, h normalised
             }
         return tensor, target
