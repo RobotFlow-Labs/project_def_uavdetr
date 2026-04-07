@@ -1,0 +1,55 @@
+# Round 3: Finetune on custom night/rain/fog dataset
+# Resume from best.pth of round 2
+
+[project]
+name = "anima-def-uavdetr"
+codename = "DEF-UAVDETR"
+round = 3
+description = "Finetune on custom adverse-conditions dataset (night, rain, fog)"
+
+[training]
+batch_size = 16
+learning_rate = 5e-6             # Even lower LR for final finetune
+epochs = 20
+optimizer = "adamw"
+weight_decay = 1e-4
+scheduler = "cosine"
+warmup_ratio = 0.03              # Shorter warmup for finetune
+min_lr = 1e-7
+precision = "fp16"
+max_grad_norm = 1.0
+seed = 42
+num_gpus = 4
+
+[data]
+image_size = 640
+num_workers = 2
+
+[data.datasets]
+# Include original + adverse conditions
+seraphim = "/mnt/forge-data/datasets/uav_detection/seraphim"
+birddrone = "/mnt/forge-data/shared_infra/datasets/lat_birddrone"
+dronevehicle_night = "/mnt/forge-data/shared_infra/datasets/dronevehicle_night"
+dut_anti_uav = "/mnt/train-data/datasets/dut_anti_uav"
+# custom_adverse = "/mnt/forge-data/datasets/uav_detection/custom_night_rain_fog"  # Add when ready
+
+[checkpoint]
+resume = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth"
+output_dir = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr"
+keep_top_k = 2
+metric = "val_loss"
+
+[early_stopping]
+enabled = true
+patience = 8                     # Tighter patience for final round
+
+[launch]
+command = """
+PYTHONUNBUFFERED=1 PYTHONPATH="" \
+torchrun --nproc_per_node=4 --master_port=29500 \
+    scripts/train_ddp.py \
+    --epochs 20 --batch-size 16 --lr 5e-6 \
+    --datasets seraphim,birddrone,dronevehicle_night,dut_anti_uav \
+    --resume /mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth \
+    --workers 2 --patience 8
+"""

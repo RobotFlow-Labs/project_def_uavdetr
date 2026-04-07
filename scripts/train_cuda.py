@@ -34,7 +34,9 @@ TB_DIR = Path("/mnt/artifacts-datai/tensorboard/project_def_uavdetr")
 
 DATASETS = {
     "seraphim": Path("/mnt/forge-data/datasets/uav_detection/seraphim"),
-    "dut_anti_uav": Path("/mnt/forge-data/datasets/uav_detection/dut_anti_uav"),
+    "dut_anti_uav": Path("/mnt/train-data/datasets/dut_anti_uav"),
+    "birddrone": Path("/mnt/forge-data/shared_infra/datasets/lat_birddrone"),
+    "dronevehicle_night": Path("/mnt/forge-data/shared_infra/datasets/dronevehicle_night"),
     "visdrone": Path("/mnt/forge-data/datasets/uav_detection/visdrone"),
 }
 
@@ -334,7 +336,7 @@ def train(args):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.workers,
-        pin_memory=True,
+        pin_memory=False,
         collate_fn=collate_fn,
         drop_last=True,
         persistent_workers=args.workers > 0,
@@ -345,7 +347,7 @@ def train(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=min(args.workers, 2),
-        pin_memory=True,
+        pin_memory=False,
         collate_fn=collate_fn,
     )
 

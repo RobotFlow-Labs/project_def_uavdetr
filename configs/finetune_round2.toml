@@ -1,0 +1,53 @@
+# Round 2: Finetune on 200K+ superset (4x L4 DDP)
+# Resume from best.pth of round 1 (100 epoch Seraphim run)
+
+[project]
+name = "anima-def-uavdetr"
+codename = "DEF-UAVDETR"
+round = 2
+description = "Finetune on 200K+ superset: Seraphim + BirdDrone + DroneVehicle-night + DUT-Anti-UAV"
+
+[training]
+batch_size = 16                  # Per-GPU (effective = 64 with 4 GPUs)
+learning_rate = 1e-5             # Lower LR for finetuning (auto-scaled by DDP)
+epochs = 30
+optimizer = "adamw"
+weight_decay = 1e-4
+scheduler = "cosine"
+warmup_ratio = 0.05
+min_lr = 1e-7
+precision = "fp16"
+max_grad_norm = 1.0
+seed = 42
+num_gpus = 4
+
+[data]
+image_size = 640
+num_workers = 2
+
+[data.datasets]
+seraphim = "/mnt/forge-data/datasets/uav_detection/seraphim"
+birddrone = "/mnt/forge-data/shared_infra/datasets/lat_birddrone"
+dronevehicle_night = "/mnt/forge-data/shared_infra/datasets/dronevehicle_night"
+dut_anti_uav = "/mnt/train-data/datasets/dut_anti_uav"
+
+[checkpoint]
+resume = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth"
+output_dir = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr"
+keep_top_k = 2
+metric = "val_loss"
+
+[early_stopping]
+enabled = true
+patience = 10
+
+[launch]
+command = """
+PYTHONUNBUFFERED=1 PYTHONPATH="" \
+torchrun --nproc_per_node=4 --master_port=29500 \
+    scripts/train_ddp.py \
+    --epochs 30 --batch-size 16 --lr 1e-5 \
+    --datasets seraphim,birddrone,dronevehicle_night,dut_anti_uav \
+    --resume /mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth \
+    --workers 2 --patience 10
+"""
