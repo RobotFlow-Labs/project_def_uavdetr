@@ -1,13 +1,20 @@
-"""Hybrid box loss for DEF-UAVDETR."""
+"""DETR detection loss with Hungarian matching for DEF-UAVDETR.
+
+Proper DETR loss: Hungarian matcher assigns each GT to exactly one query,
+unmatched queries are trained as background (no object).
+
+Paper-specific additions: Inner-CIoU + NWD hybrid bbox loss.
+"""
 
 from __future__ import annotations
 
-from typing import Any
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 
+from .matcher import HungarianMatcher
+
+# ── Helper functions ───────────────────────────────────────────────────
 
 def cxcywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     cx, cy, w, h = boxes.unbind(dim=-1)
@@ -16,22 +23,10 @@ def cxcywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     return torch.stack((cx - half_w, cy - half_h, cx + half_w, cy + half_h), dim=-1)
 
 
-def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
-    x1 = torch.maximum(boxes1[..., 0], boxes2[..., 0])
-    y1 = torch.maximum(boxes1[..., 1], boxes2[..., 1])
-    x2 = torch.minimum(boxes1[..., 2], boxes2[..., 2])
-    y2 = torch.minimum(boxes1[..., 3], boxes2[..., 3])
-
-    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
-    area1 = (boxes1[..., 2] - boxes1[..., 0]).clamp(min=0) * (boxes1[..., 3] - boxes1[..., 1]).clamp(min=0)
-    area2 = (boxes2[..., 2] - boxes2[..., 0]).clamp(min=0) * (boxes2[..., 3] - boxes2[..., 1]).clamp(min=0)
-    union = area1 + area2 - inter + 1e-7
-    return inter / union
-
-
-def inner_ciou_loss(pred_boxes: torch.Tensor, target_boxes: torch.Tensor, *, inner_ratio: float = 0.8) -> torch.Tensor:
-    """Approximate Inner-CIoU by shrinking both boxes before applying CIoU terms."""
-
+def inner_ciou_loss(
+    pred_boxes: torch.Tensor, target_boxes: torch.Tensor, *, inner_ratio: float = 0.8,
+) -> torch.Tensor:
+    """Inner-CIoU loss from the paper."""
     pred_inner = pred_boxes.clone()
     target_inner = target_boxes.clone()
     pred_inner[..., 2:] = pred_inner[..., 2:] * inner_ratio
@@ -39,23 +34,34 @@ def inner_ciou_loss(pred_boxes: torch.Tensor, target_boxes: torch.Tensor, *, inn
 
     pred_xyxy = cxcywh_to_xyxy(pred_inner)
     target_xyxy = cxcywh_to_xyxy(target_inner)
-    iou = box_iou(pred_xyxy, target_xyxy)
 
-    pred_center = pred_inner[..., :2]
-    target_center = target_inner[..., :2]
-    center_distance = (pred_center - target_center).pow(2).sum(dim=-1)
+    x1 = torch.maximum(pred_xyxy[..., 0], target_xyxy[..., 0])
+    y1 = torch.maximum(pred_xyxy[..., 1], target_xyxy[..., 1])
+    x2 = torch.minimum(pred_xyxy[..., 2], target_xyxy[..., 2])
+    y2 = torch.minimum(pred_xyxy[..., 3], target_xyxy[..., 3])
+    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
+    area1 = (pred_xyxy[..., 2] - pred_xyxy[..., 0]).clamp(min=0) * (
+        pred_xyxy[..., 3] - pred_xyxy[..., 1]
+    ).clamp(min=0)
+    area2 = (target_xyxy[..., 2] - target_xyxy[..., 0]).clamp(min=0) * (
+        target_xyxy[..., 3] - target_xyxy[..., 1]
+    ).clamp(min=0)
+    iou = inter / (area1 + area2 - inter + 1e-7)
 
+    center_dist = (pred_inner[..., :2] - target_inner[..., :2]).pow(2).sum(dim=-1)
     outer_x1 = torch.minimum(pred_xyxy[..., 0], target_xyxy[..., 0])
     outer_y1 = torch.minimum(pred_xyxy[..., 1], target_xyxy[..., 1])
     outer_x2 = torch.maximum(pred_xyxy[..., 2], target_xyxy[..., 2])
     outer_y2 = torch.maximum(pred_xyxy[..., 3], target_xyxy[..., 3])
-    diagonal = (outer_x2 - outer_x1).pow(2) + (outer_y2 - outer_y1).pow(2) + 1e-7
+    diag = (outer_x2 - outer_x1).pow(2) + (outer_y2 - outer_y1).pow(2) + 1e-7
 
-    pred_w, pred_h = pred_inner[..., 2], pred_inner[..., 3]
-    target_w, target_h = target_inner[..., 2], target_inner[..., 3]
-    v = (4 / torch.pi**2) * (torch.atan(target_w / (target_h + 1e-7)) - torch.atan(pred_w / (pred_h + 1e-7))).pow(2)
+    pw, ph = pred_inner[..., 2], pred_inner[..., 3]
+    tw, th = target_inner[..., 2], target_inner[..., 3]
+    v = (4 / torch.pi**2) * (
+        torch.atan(tw / (th + 1e-7)) - torch.atan(pw / (ph + 1e-7))
+    ).pow(2)
     alpha = v / (1 - iou + v + 1e-7)
-    ciou = iou - (center_distance / diagonal) - alpha * v
+    ciou = iou - (center_dist / diag) - alpha * v
     return 1 - ciou
 
 
@@ -65,8 +71,7 @@ def normalized_wasserstein_loss(
     *,
     nwd_constant: float = 12.8,
 ) -> torch.Tensor:
-    """Compute an NWD-style loss between box Gaussian approximations."""
-
+    """NWD loss from the paper."""
     center_diff = (pred_boxes[..., :2] - target_boxes[..., :2]).pow(2).sum(dim=-1)
     size_diff = (pred_boxes[..., 2:] - target_boxes[..., 2:]).pow(2).sum(dim=-1) / 4
     wasserstein = torch.sqrt(center_diff + size_diff + 1e-7)
@@ -74,95 +79,145 @@ def normalized_wasserstein_loss(
     return 1 - similarity
 
 
-def _as_batch_targets(targets: Any) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-    if isinstance(targets, dict):
-        boxes = targets["boxes"]
-        labels = targets["labels"]
-        if isinstance(boxes, list):
-            return boxes, labels
-        if boxes.ndim == 2:
-            return [boxes], [labels]
-        return [boxes[index] for index in range(boxes.shape[0])], [labels[index] for index in range(labels.shape[0])]
-    raise TypeError("targets must be a dict with 'boxes' and 'labels'")
+def giou_loss_paired(pred_xyxy: torch.Tensor, gt_xyxy: torch.Tensor) -> torch.Tensor:
+    """Pairwise GIoU loss for matched box pairs."""
+    x1 = torch.max(pred_xyxy[..., 0], gt_xyxy[..., 0])
+    y1 = torch.max(pred_xyxy[..., 1], gt_xyxy[..., 1])
+    x2 = torch.min(pred_xyxy[..., 2], gt_xyxy[..., 2])
+    y2 = torch.min(pred_xyxy[..., 3], gt_xyxy[..., 3])
+    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
+
+    area1 = (pred_xyxy[..., 2] - pred_xyxy[..., 0]) * (pred_xyxy[..., 3] - pred_xyxy[..., 1])
+    area2 = (gt_xyxy[..., 2] - gt_xyxy[..., 0]) * (gt_xyxy[..., 3] - gt_xyxy[..., 1])
+    union = area1 + area2 - inter + 1e-7
+    iou = inter / union
+
+    enc_x1 = torch.min(pred_xyxy[..., 0], gt_xyxy[..., 0])
+    enc_y1 = torch.min(pred_xyxy[..., 1], gt_xyxy[..., 1])
+    enc_x2 = torch.max(pred_xyxy[..., 2], gt_xyxy[..., 2])
+    enc_y2 = torch.max(pred_xyxy[..., 3], gt_xyxy[..., 3])
+    enc_area = (enc_x2 - enc_x1) * (enc_y2 - enc_y1) + 1e-7
+
+    return 1 - (iou - (enc_area - union) / enc_area)
 
 
-class HybridInnerCiouNwdLoss(nn.Module):
-    """Hybrid loss with explicit Inner-CIoU and NWD weighting."""
+# ── Main DETR Loss ─────────────────────────────────────────────────────
+
+class DETRDetectionLoss(nn.Module):
+    """DETR detection loss with Hungarian matching.
+
+    - Classification: focal BCE on ALL queries (matched=target, unmatched=background)
+    - Bbox regression: L1 + GIoU + Inner-CIoU + NWD on MATCHED queries only
+    """
 
     def __init__(
         self,
         *,
-        alpha: float = 0.6,
+        num_classes: int = 1,
         cls_weight: float = 1.0,
         bbox_weight: float = 5.0,
+        giou_weight: float = 2.0,
+        ciou_alpha: float = 0.6,
         nwd_constant: float = 12.8,
     ) -> None:
         super().__init__()
-        self.alpha = alpha
+        self.num_classes = num_classes
         self.cls_weight = cls_weight
         self.bbox_weight = bbox_weight
+        self.giou_weight = giou_weight
+        self.ciou_alpha = ciou_alpha
         self.nwd_constant = nwd_constant
+        self.matcher = HungarianMatcher()
 
     def forward(
         self,
         pred_boxes: torch.Tensor,
         pred_logits: torch.Tensor,
-        targets: dict[str, torch.Tensor],
+        targets: dict[str, list[torch.Tensor]],
     ) -> dict[str, torch.Tensor]:
-        target_boxes_batch, target_labels_batch = _as_batch_targets(targets)
+        """Compute DETR loss.
+
+        Args:
+            pred_boxes: [B, nq, 4] cxcywh normalised (sigmoid)
+            pred_logits: [B, nq, nc]
+            targets: {'boxes': list of [Ni,4], 'labels': list of [Ni]}
+        """
         device = pred_boxes.device
-        loss_cls = torch.tensor(0.0, device=device)
-        loss_l1 = torch.tensor(0.0, device=device)
-        loss_ciou = torch.tensor(0.0, device=device)
-        loss_nwd = torch.tensor(0.0, device=device)
-        valid_batches = 0
+        bs, nq = pred_boxes.shape[:2]
 
-        for batch_index, (target_boxes, target_labels) in enumerate(zip(target_boxes_batch, target_labels_batch, strict=True)):
-            target_boxes = target_boxes.to(device)
-            target_labels = target_labels.to(device).long().reshape(-1)
-            if target_boxes.numel() == 0:
-                continue
+        gt_boxes = targets["boxes"]
+        gt_labels = targets["labels"]
 
-            count = min(target_boxes.shape[0], pred_boxes.shape[1])
-            batch_pred_boxes = pred_boxes[batch_index, :count]
-            batch_pred_logits = pred_logits[batch_index, :count]
-            batch_target_boxes = target_boxes[:count]
-            batch_target_labels = target_labels[:count]
+        # ── 1. Hungarian matching ──────────────────────────────────
+        match_indices = self.matcher(
+            pred_boxes.detach().float(),
+            pred_logits.detach().float(),
+            gt_boxes, gt_labels,
+        )
 
-            target_scores = torch.zeros_like(batch_pred_logits)
-            scatter_idx = batch_target_labels.unsqueeze(-1).clamp(0, batch_pred_logits.shape[1] - 1)
-            target_scores.scatter_(1, scatter_idx, 1.0)
+        # ── 2. Classification loss (ALL queries) ──────────────────
+        target_cls = torch.zeros(bs, nq, self.num_classes, device=device)
+        for i, (pred_idx, gt_idx) in enumerate(match_indices):
+            if pred_idx.numel() > 0:
+                cls_ids = gt_labels[i][gt_idx].to(device).long()
+                cls_ids = cls_ids.clamp(0, self.num_classes - 1)
+                target_cls[i, pred_idx, cls_ids] = 1.0
 
-            loss_cls = loss_cls + F.binary_cross_entropy_with_logits(batch_pred_logits, target_scores)
-            loss_l1 = loss_l1 + F.l1_loss(batch_pred_boxes, batch_target_boxes)
-            loss_ciou = loss_ciou + inner_ciou_loss(batch_pred_boxes, batch_target_boxes).mean()
-            loss_nwd = loss_nwd + normalized_wasserstein_loss(
-                batch_pred_boxes,
-                batch_target_boxes,
-                nwd_constant=self.nwd_constant,
+        n_pos = max(sum(idx[0].numel() for idx in match_indices), 1)
+
+        # Focal BCE
+        p = pred_logits.sigmoid()
+        ce = F.binary_cross_entropy_with_logits(pred_logits, target_cls, reduction="none")
+        focal_weight = target_cls * (1 - p) ** 2 + (1 - target_cls) * p**2
+        loss_cls = (0.25 * focal_weight * ce).sum() / n_pos
+
+        # ── 3. Bbox losses (ONLY matched) ─────────────────────────
+        matched_pred = []
+        matched_gt = []
+        for i, (pred_idx, gt_idx) in enumerate(match_indices):
+            if pred_idx.numel() > 0:
+                matched_pred.append(pred_boxes[i, pred_idx])
+                matched_gt.append(gt_boxes[i][gt_idx].to(device))
+
+        if matched_pred:
+            all_pred = torch.cat(matched_pred)
+            all_gt = torch.cat(matched_gt)
+            n_m = all_pred.shape[0]
+
+            loss_l1 = F.l1_loss(all_pred, all_gt, reduction="sum") / max(n_m, 1)
+
+            pred_xyxy = cxcywh_to_xyxy(all_pred)
+            gt_xyxy = cxcywh_to_xyxy(all_gt)
+            loss_giou = giou_loss_paired(pred_xyxy, gt_xyxy).sum() / max(n_m, 1)
+
+            loss_ciou = inner_ciou_loss(all_pred, all_gt).mean()
+            loss_nwd = normalized_wasserstein_loss(
+                all_pred, all_gt, nwd_constant=self.nwd_constant,
             ).mean()
-            valid_batches += 1
+        else:
+            zero = pred_boxes.sum() * 0.0
+            loss_l1 = zero
+            loss_giou = zero
+            loss_ciou = zero
+            loss_nwd = zero
 
-        if valid_batches == 0:
-            total = pred_boxes.sum() * 0.0
-            return {
-                "loss": total,
-                "loss_cls": total,
-                "loss_bbox_l1": total,
-                "loss_inner_ciou": total,
-                "loss_nwd": total,
-            }
+        # ── 4. Total ──────────────────────────────────────────────
+        loss_bbox = loss_l1 + self.ciou_alpha * loss_ciou + (1 - self.ciou_alpha) * loss_nwd
+        total = (
+            self.cls_weight * loss_cls
+            + self.bbox_weight * loss_bbox
+            + self.giou_weight * loss_giou
+        )
 
-        loss_cls = loss_cls / valid_batches
-        loss_l1 = loss_l1 / valid_batches
-        loss_ciou = loss_ciou / valid_batches
-        loss_nwd = loss_nwd / valid_batches
-        loss_bbox = loss_l1 + self.alpha * loss_ciou + (1 - self.alpha) * loss_nwd
-        total = self.cls_weight * loss_cls + self.bbox_weight * loss_bbox
         return {
             "loss": total,
-            "loss_cls": loss_cls,
-            "loss_bbox_l1": loss_l1,
-            "loss_inner_ciou": loss_ciou,
-            "loss_nwd": loss_nwd,
+            "loss_cls": loss_cls.detach(),
+            "loss_bbox_l1": loss_l1.detach(),
+            "loss_giou": loss_giou.detach(),
+            "loss_inner_ciou": loss_ciou.detach(),
+            "loss_nwd": loss_nwd.detach(),
         }
+
+
+# Backward-compatible alias
+HybridInnerCiouNwdLoss = DETRDetectionLoss

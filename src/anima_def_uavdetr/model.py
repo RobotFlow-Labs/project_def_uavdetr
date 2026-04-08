@@ -28,7 +28,7 @@ class DefUavDetr(nn.Module):
             num_heads=8,
             num_decoder_layers=3,
         )
-        self.loss_fn = HybridInnerCiouNwdLoss(alpha=0.6, nwd_constant=12.8)
+        self.loss_fn = HybridInnerCiouNwdLoss(ciou_alpha=0.6, nwd_constant=12.8)
 
     def forward_features(
         self,
