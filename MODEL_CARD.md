@@ -22,13 +22,20 @@
 
 ## Training Data
 
+### v1 (Round 1)
 | Dataset | Images | Source | License |
 |---------|--------|--------|---------|
 | Seraphim | 75,134 (train) | 23 open sources | CC BY 4.0 |
-| Seraphim | 3,756 (val) | — | CC BY 4.0 |
-| Seraphim | 8,349 (test) | — | CC BY 4.0 |
 
-**Not yet trained on**: DUT-Anti-UAV, BirdDrone, DroneVehicle-night (planned for Round 2)
+### v2 (Round 2 — current best)
+| Dataset | Images | Source |
+|---------|--------|--------|
+| Seraphim | 75,134 | Curated drone detection |
+| BirdDrone | 145,506 | Drone + bird video frames |
+| DUT-Anti-UAV | 5,200 | 35 UAV types benchmark |
+| DroneVehicle-night | 10,357 | Night IR aerial imagery |
+| **Total train** | **224,388** | |
+| **Total val** | **11,809** | |
 
 ## Training Procedure
 
@@ -68,11 +75,12 @@ Documented in the paper (Section 4.6):
 
 ## Model Versions
 
-| Version | Dataset | Epochs | Val Loss | Status |
-|---------|---------|--------|----------|--------|
-| v1 (this) | Seraphim 75K | 100 | 2.1054 | Released |
-| v2 (planned) | 200K+ superset | 30 | — | Pending 4-GPU DDP |
-| v3 (planned) | + night/rain/fog | 20 | — | Pending custom data |
+| Version | Dataset | Images | Epochs | Hardware | Val Loss | Status |
+|---------|---------|--------|--------|----------|----------|--------|
+| v1 | Seraphim | 75K | 100 | 1x L4 | 2.1054 | Released |
+| v2 | Unified (6 datasets) | 236K | 30 | 4x L4 DDP | 2.3017 | Released |
+| v3 | Unified v2 (7 datasets) | 261K | 20 | 4x L4 DDP | — | Ready |
+| v4 | Nighthawk Mega | 1.78M | 20 | 8x L4 DDP | — | Planned |
 
 ## Citation
 
