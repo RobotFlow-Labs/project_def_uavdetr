@@ -1,0 +1,41 @@
+# Adversarial attack configuration for DEF-UAVDETR
+# Used by scripts/adversarial_attack.py
+
+[project]
+name = "anima-def-uavdetr"
+codename = "DEF-UAVDETR"
+
+[model]
+checkpoint = "/mnt/artifacts-datai/checkpoints/project_def_uavdetr/best.pth"
+num_classes = 1
+num_queries = 300
+image_size = 640
+
+[data]
+test_images = "/mnt/forge-data/shared_infra/datasets/uav_unified/val/images"
+test_labels = "/mnt/forge-data/shared_infra/datasets/uav_unified/val/labels"
+max_samples = 500                   # Max images to evaluate (0 = all)
+conf_threshold = 0.25               # Detection confidence threshold
+max_det = 300                       # Max detections per image
+
+[output]
+report_dir = "/mnt/artifacts-datai/reports/project_def_uavdetr"
+
+[attack.fgsm]
+enabled = true
+epsilons = [0.005, 0.01, 0.02, 0.04, 0.08]    # L-inf perturbation budget (0-1 scale)
+
+[attack.pgd]
+enabled = true
+epsilons = [0.005, 0.01, 0.02, 0.04]           # L-inf perturbation budget
+alpha = 0.004                                    # Step size (auto = eps / steps * 2.5)
+steps = 10                                       # PGD iteration count
+random_start = true                              # Random initialization within eps-ball
+
+[attack.patch]
+enabled = true
+patch_sizes = [32, 64, 96]                       # Patch size in pixels
+num_patches = 1                                   # Patches per image
+optimize_steps = 50                               # Optimization steps for adversarial patch
+learning_rate = 0.01                              # Patch optimization LR
+target_location = "on_object"                     # "on_object" | "random" | "center"
