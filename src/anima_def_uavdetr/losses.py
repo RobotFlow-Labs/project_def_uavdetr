@@ -165,11 +165,16 @@ class DETRDetectionLoss(nn.Module):
 
         n_pos = max(sum(idx[0].numel() for idx in match_indices), 1)
 
-        # Focal BCE
-        p = pred_logits.sigmoid()
+        # Weighted BCE: positives weighted 1.0, backgrounds weighted 0.1 (eos_coef)
+        # This prevents 298 background queries from drowning out 2 matched queries
+        eos_coef = 0.1
+        weight = torch.full((bs, nq, self.num_classes), eos_coef, device=device)
+        for i, (pred_idx, _gt_idx) in enumerate(match_indices):
+            if pred_idx.numel() > 0:
+                weight[i, pred_idx] = 1.0
+
         ce = F.binary_cross_entropy_with_logits(pred_logits, target_cls, reduction="none")
-        focal_weight = target_cls * (1 - p) ** 2 + (1 - target_cls) * p**2
-        loss_cls = (0.25 * focal_weight * ce).sum() / n_pos
+        loss_cls = (weight * ce).sum() / n_pos
 
         # ── 3. Bbox losses (ONLY matched) ─────────────────────────
         matched_pred = []
