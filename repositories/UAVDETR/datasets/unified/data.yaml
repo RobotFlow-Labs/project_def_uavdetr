@@ -1,0 +1,7 @@
+path: /mnt/forge-data/shared_infra/datasets/uav_unified
+train: train/images
+val: val/images
+
+nc: 1
+names:
+  0: uav
